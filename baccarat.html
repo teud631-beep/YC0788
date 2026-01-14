@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>ORACLE V11 | 智慧預測系統</title>
+    
+    <!-- 使用 Tailwind CSS 進行快速 UI 渲染 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;700&display=swap');
+        
+        :root {
+            --bg-color: #050505;
+            --card-bg: #111111;
+            --accent-red: #dc2626;
+            --accent-blue: #2563eb;
+            --accent-green: #22c55e;
+            --text-main: #e2e2e2;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 10px;
+            padding-top: env(safe-area-inset-top);
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .oracle-font { font-family: 'Orbitron', sans-serif; }
+
+        /* 路單容器 */
+        .road-container {
+            background-color: #0a0a0a;
+            border: 1px solid #222;
+            overflow-x: auto;
+            position: relative;
+            scrollbar-width: none; /* Firefox */
+        }
+        .road-container::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+
+        .grid-base {
+            display: grid;
+            background-image: 
+                linear-gradient(#151515 1px, transparent 1px),
+                linear-gradient(90deg, #151515 1px, transparent 1px);
+            width: fit-content;
+        }
+
+        .big-road-bg { background-size: 24px 24px; height: 144px; min-width: 100%; }
+        .sub-road-bg { background-size: 13px 13px; height: 78px; min-width: 100%; }
+
+        /* 大路點設計 */
+        .dot {
+            width: 20px; height: 20px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 900; margin: 2px;
+            position: absolute;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .b-bg { background: radial-gradient(circle at 30% 30%, #ef4444, #991b1b); color: white; box-shadow: 0 4px 10px rgba(220, 38, 38, 0.3); }
+        .p-bg { background: radial-gradient(circle at 30% 30%, #3b82f6, #1e40af); color: white; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3); }
+
+        /* 下三路符號 */
+        .sub-item { width: 13px; height: 13px; display: flex; align-items: center; justify-content: center; position: absolute; }
+        .sub-circle { width: 10px; height: 10px; border-radius: 50%; border: 2px solid; }
+        .sub-solid { width: 8px; height: 8px; border-radius: 50%; }
+        .sub-slash { width: 2px; height: 11px; transform: rotate(45deg); }
+
+        .red-c { border-color: #ef4444; background-color: #ef4444; }
+        .blue-c { border-color: #3b82f6; background-color: #3b82f6; }
+
+        /* 儀表板 */
+        .prediction-card {
+            background: linear-gradient(180deg, #181818 0%, #080808 100%);
+            border: 1px solid #333;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        /* 掃描效果 */
+        .scanning-active::after {
+            content: '';
+            position: absolute;
+            top: -100%; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.05), transparent);
+            animation: scan-line 3s infinite linear;
+            pointer-events: none;
+        }
+        @keyframes scan-line {
+            0% { top: -100%; }
+            100% { top: 100%; }
+        }
+
+        .btn-press:active { transform: scale(0.92); filter: brightness(1.2); }
+
+        /* 頂部導航狀態 */
+        .status-tag {
+            font-size: 10px;
+            font-weight: 800;
+            padding: 4px 12px;
+            border-radius: 100px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+        .tag-input { background: #1e40af; color: white; box-shadow: 0 0 15px rgba(37, 99, 235, 0.3); }
+        .tag-predict { background: #b91c1c; color: white; box-shadow: 0 0 15px rgba(220, 38, 38, 0.5); animation: pulse-glow 1.5s infinite; }
+        
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 5px rgba(220, 38, 38, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.8); }
+            100% { box-shadow: 0 0 5px rgba(220, 38, 38, 0.5); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="max-w-2xl mx-auto pb-10">
+    <!-- 頁首與統計 -->
+    <div class="flex justify-between items-end mb-4 px-2">
+        <div>
+            <div id="status-tag" class="status-tag tag-input mb-2 inline-block">Manual Input / 錄入模式</div>
+            <h1 class="text-3xl font-black tracking-tighter text-white oracle-font italic leading-none">ORACLE <span class="text-red-600">V11</span></h1>
+        </div>
+        <div class="flex gap-4 text-right">
+            <div class="flex flex-col">
+                <span class="text-[10px] text-zinc-500 font-bold uppercase">Player</span>
+                <span id="c-p" class="text-2xl font-black text-blue-500 oracle-font leading-none">0</span>
+            </div>
+            <div class="flex flex-col">
+                <span class="text-[10px] text-zinc-500 font-bold uppercase">Tie</span>
+                <span id="c-t" class="text-2xl font-black text-green-500 oracle-font leading-none">0</span>
+            </div>
+            <div class="flex flex-col">
+                <span class="text-[10px] text-zinc-500 font-bold uppercase">Banker</span>
+                <span id="c-b" class="text-2xl font-black text-red-500 oracle-font leading-none">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 智慧預測儀表板 -->
+    <div id="dashboard" class="prediction-card rounded-[2rem] p-6 mb-6 relative overflow-hidden">
+        <div class="flex justify-between items-start mb-6">
+            <div class="z-10">
+                <p class="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.3em] mb-1">Live Suggestion</p>
+                <div id="ai-suggestion" class="text-xl font-black italic text-zinc-700">Waiting for data...</div>
+            </div>
+            <div class="text-right z-10">
+                <p class="text-[10px] text-zinc-500 font-bold uppercase mb-1">Confidence</p>
+                <div id="main-prob" class="text-5xl font-black oracle-font text-white opacity-10">0%</div>
+            </div>
+        </div>
+        
+        <!-- 動態比例條: [閑] [和] [莊] -->
+        <div class="relative w-full h-6 bg-black/50 rounded-full overflow-hidden flex border border-white/10 shadow-2xl">
+            <div id="bar-p" class="h-full bg-blue-600 transition-all duration-1000 ease-out" style="width: 33.3%"></div>
+            <div id="bar-t" class="h-full bg-green-500 transition-all duration-1000 ease-out" style="width: 33.3%"></div>
+            <div id="bar-b" class="h-full bg-red-600 transition-all duration-1000 ease-out" style="width: 33.3%"></div>
+        </div>
+        
+        <div class="flex justify-between mt-4 px-2 font-black oracle-font">
+            <div class="text-blue-500 text-left">
+                <p class="text-[10px] opacity-50 uppercase">Player</p>
+                <span id="v-p" class="text-xl leading-none">--</span>
+            </div>
+            <div class="text-green-500 text-center">
+                <p class="text-[10px] opacity-50 uppercase">Tie</p>
+                <span id="v-t" class="text-xl leading-none">--</span>
+            </div>
+            <div class="text-red-500 text-right">
+                <p class="text-[10px] opacity-50 uppercase">Banker</p>
+                <span id="v-b" class="text-xl leading-none">--</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 核心切換按鈕 -->
+    <button id="toggle-btn" onclick="toggleMode()" class="w-full py-6 mb-6 rounded-2xl font-black text-white oracle-font shadow-xl bg-zinc-900 border border-white/10 btn-press transition-all text-lg tracking-[0.2em] uppercase">
+        Start Analyzing
+    </button>
+
+    <!-- 路單顯示區 -->
+    <div class="space-y-2 mb-6">
+        <div class="road-container rounded-2xl shadow-inner">
+            <div id="big-road" class="grid-base big-road-bg relative"></div>
+        </div>
+        
+        <div id="subs-area" class="grid grid-cols-2 gap-2 opacity-40 grayscale transition-all duration-500">
+            <div class="road-container rounded-2xl h-24">
+                <div class="px-3 py-1 text-[9px] text-zinc-600 font-bold border-b border-white/5 uppercase italic">Big Eye Boy</div>
+                <div id="eye-road" class="grid-base sub-road-bg relative"></div>
+            </div>
+            <div class="road-container rounded-2xl h-24">
+                <div class="px-3 py-1 text-[9px] text-zinc-600 font-bold border-b border-white/5 uppercase italic">Small Road</div>
+                <div id="small-road" class="grid-base sub-road-bg relative"></div>
+            </div>
+            <div class="road-container col-span-2 h-20 rounded-2xl">
+                <div class="px-3 py-1 text-[9px] text-zinc-600 font-bold border-b border-white/5 uppercase italic text-center">Cockroach Road</div>
+                <div id="cock-road" class="grid-base sub-road-bg relative"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 控制台 -->
+    <div class="grid grid-cols-1 gap-4">
+        <!-- 大路輸入 -->
+        <div class="bg-zinc-900/50 p-6 rounded-[2.5rem] border border-white/5">
+            <div class="flex justify-between items-center mb-4">
+                <span class="text-[12px] font-black text-zinc-500 uppercase tracking-widest">Main Data Input</span>
+                <div class="flex gap-2">
+                    <button onclick="undo('big')" class="bg-zinc-800 px-4 py-2 rounded-xl text-xs font-bold btn-press">Undo</button>
+                    <button onclick="reset('big')" class="bg-red-900/20 text-red-500 px-4 py-2 rounded-xl text-xs font-bold btn-press">Clear</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+                <button onclick="inputBig('P')" class="btn-press bg-blue-600 h-20 rounded-3xl font-black text-3xl shadow-lg border-b-8 border-blue-900 text-white">閑</button>
+                <button onclick="inputBig('T')" class="btn-press bg-green-600 h-20 rounded-3xl font-black text-2xl shadow-lg border-b-8 border-green-900 text-white">和</button>
+                <button onclick="inputBig('B')" class="btn-press bg-red-600 h-20 rounded-3xl font-black text-3xl shadow-lg border-b-8 border-red-900 text-white">莊</button>
+            </div>
+        </div>
+
+        <!-- 下三路輸入 -->
+        <div class="bg-zinc-900/80 p-6 rounded-[2.5rem] border border-white/5">
+            <div class="flex justify-between items-center mb-4">
+                <span class="text-[12px] font-black text-zinc-600 uppercase tracking-widest">Sub-Road Injection</span>
+                <div class="flex gap-2">
+                    <button onclick="undo('sub')" class="bg-zinc-800 px-4 py-2 rounded-xl text-xs font-bold btn-press">Undo</button>
+                    <button onclick="reset('sub')" class="bg-orange-900/20 text-orange-500 px-4 py-2 rounded-xl text-xs font-bold btn-press">Clear</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+                <div class="flex flex-col gap-2">
+                    <p class="text-[10px] text-center font-bold text-zinc-700 uppercase">Eye</p>
+                    <button onclick="inputSub('eye', 'B')" class="py-4 bg-blue-900/20 border border-blue-500/30 rounded-2xl text-blue-500 text-xs font-black btn-press">藍</button>
+                    <button onclick="inputSub('eye', 'R')" class="py-4 bg-red-900/20 border border-red-500/30 rounded-2xl text-red-500 text-xs font-black btn-press">紅</button>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <p class="text-[10px] text-center font-bold text-zinc-700 uppercase">Small</p>
+                    <button onclick="inputSub('small', 'B')" class="py-4 bg-blue-900/20 border border-blue-500/30 rounded-2xl text-blue-500 text-xs font-black btn-press">藍</button>
+                    <button onclick="inputSub('small', 'R')" class="py-4 bg-red-900/20 border border-red-500/30 rounded-2xl text-red-500 text-xs font-black btn-press">紅</button>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <p class="text-[10px] text-center font-bold text-zinc-700 uppercase">Cock</p>
+                    <button onclick="inputSub('cock', 'B')" class="py-4 bg-blue-900/20 border border-blue-500/30 rounded-2xl text-blue-500 text-xs font-black btn-press">藍</button>
+                    <button onclick="inputSub('cock', 'R')" class="py-4 bg-red-900/20 border border-red-500/30 rounded-2xl text-red-500 text-xs font-black btn-press">紅</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let bigHistory = [];
+    let subHistory = [];
+    let isPredicting = false;
+
+    function toggleMode() {
+        isPredicting = !isPredicting;
+        const btn = document.getElementById('toggle-btn');
+        const dash = document.getElementById('dashboard');
+        const tag = document.getElementById('status-tag');
+        const area = document.getElementById('subs-area');
+
+        if (isPredicting) {
+            btn.innerText = "Stop / Return to Input";
+            btn.classList.replace('bg-zinc-900', 'bg-red-700');
+            dash.classList.add('scanning-active');
+            tag.innerText = "Analyzing Mode / 分析中";
+            tag.classList.replace('tag-input', 'tag-predict');
+            area.classList.remove('opacity-40', 'grayscale');
+        } else {
+            btn.innerText = "Start Analyzing";
+            btn.classList.replace('bg-red-700', 'bg-zinc-900');
+            dash.classList.remove('scanning-active');
+            tag.innerText = "Manual Input / 錄入模式";
+            tag.classList.replace('tag-predict', 'tag-input');
+            area.classList.add('opacity-40', 'grayscale');
+        }
+        refresh();
+    }
+
+    function inputBig(type) { bigHistory.push(type); refresh(); }
+    function inputSub(road, color) { subHistory.push({ road, color }); refresh(); }
+    function undo(type) { if(type === 'big') bigHistory.pop(); else subHistory.pop(); refresh(); }
+    function reset(type) { if(confirm("Clear all data?")) { if(type === 'big') bigHistory = []; else subHistory = []; refresh(); } }
+
+    function refresh() {
+        // 1. 大路運算與渲染
+        const bigData = processBigRoad(bigHistory);
+        renderBig(bigData);
+
+        // 2. 計數
+        document.getElementById('c-b').innerText = bigHistory.filter(x => x === 'B').length;
+        document.getElementById('c-p').innerText = bigHistory.filter(x => x === 'P').length;
+        document.getElementById('c-t').innerText = bigHistory.filter(x => x === 'T').length;
+
+        // 3. 下三路數據過濾
+        const man = { eye: [], small: [], cock: [] };
+        subHistory.forEach(h => man[h.road].push(h.color));
+
+        let eyeFinal, smallFinal, cockFinal;
+
+        if (isPredicting) {
+            // 分析模式: 合併
+            eyeFinal = layoutSub(derive(bigData, 1), man.eye);
+            smallFinal = layoutSub(derive(bigData, 2), man.small);
+            cockFinal = layoutSub(derive(bigData, 3), man.cock);
+            runOracle(bigData, eyeFinal, smallFinal, cockFinal);
+        } else {
+            // 錄入模式: 僅手動
+            eyeFinal = layoutSub([], man.eye);
+            smallFinal = layoutSub([], man.small);
+            cockFinal = layoutSub([], man.cock);
+            resetUI();
+        }
+
+        renderSub('eye-road', eyeFinal, 'circle');
+        renderSub('small-road', smallFinal, 'solid');
+        renderSub('cock-road', cockFinal, 'slash');
+    }
+
+    function resetUI() {
+        document.getElementById('ai-suggestion').innerText = "Waiting for data...";
+        document.getElementById('ai-suggestion').className = "text-xl font-black italic text-zinc-700";
+        document.getElementById('main-prob').innerText = "0%";
+        document.getElementById('main-prob').style.opacity = "0.1";
+        document.getElementById('bar-p').style.width = "33.3%";
+        document.getElementById('bar-t').style.width = "33.3%";
+        document.getElementById('bar-b').style.width = "33.3%";
+        ['v-p', 'v-t', 'v-b'].forEach(id => document.getElementById(id).innerText = "--");
+    }
+
+    function runOracle(big, eye, small, cock) {
+        if (bigHistory.length < 2) return;
+
+        let bW = 40, pW = 40, tW = 10;
+
+        const getScore = (data) => {
+            if (data.length === 0) return 0;
+            const r = data.filter(d => d.color === 'R').length;
+            return (r / data.length > 0.5) ? 15 : -15;
+        };
+
+        const score = getScore(eye) + getScore(small) + getScore(cock);
+        const last = bigHistory.filter(x => x !== 'T').slice(-1)[0];
+        if (last === 'B') bW += score; else pW += score;
+
+        const tFreq = bigHistory.slice(-15).filter(x => x === 'T').length;
+        tW += (tFreq * 10);
+
+        const total = bW + pW + tW;
+        const bP = Math.round((bW / total) * 100);
+        const tP = Math.round((tW / total) * 100);
+        const pP = 100 - bP - tP;
+
+        document.getElementById('bar-p').style.width = pP + "%";
+        document.getElementById('bar-t').style.width = tP + "%";
+        document.getElementById('bar-b').style.width = bP + "%";
+        document.getElementById('v-p').innerText = pP + "%";
+        document.getElementById('v-t').innerText = tP + "%";
+        document.getElementById('v-b').innerText = bP + "%";
+
+        const m = document.getElementById('main-prob');
+        const s = document.getElementById('ai-suggestion');
+        m.innerText = Math.max(bP, pP, tP) + "%";
+        m.style.opacity = "1";
+
+        if (tP > 30) { s.innerText = "高頻和局：建議防守和局"; s.className = "text-xl font-black italic text-green-500"; }
+        else if (bP > pP + 3) { s.innerText = "趨勢鎖定：莊家優勢 (B)"; s.className = "text-xl font-black italic text-red-500"; }
+        else if (pP > bP + 3) { s.innerText = "趨勢鎖定：閑家優勢 (P)"; s.className = "text-xl font-black italic text-blue-500"; }
+        else { s.innerText = "局勢膠著：建議觀察"; s.className = "text-xl font-black italic text-yellow-600"; }
+    }
+
+    // --- 算法模塊 ---
+
+    function layoutSub(auto, manual) {
+        const all = auto.concat(manual);
+        let res = [], c = 0, r = 0, last = null;
+        all.forEach(color => {
+            if (!last) { res.push({ color, r: 0, c: 0 }); }
+            else if (color === last) {
+                let nr = r + 1, nc = c;
+                if (nr >= 6 || res.some(d => d.r === nr && d.c === nc)) { nr = r; nc++; }
+                r = nr; c = nc;
+                res.push({ color, r, c });
+            } else {
+                r = 0; c++;
+                while (res.some(d => d.r === 0 && d.c === c)) c++;
+                res.push({ color, r: 0, c });
+            }
+            last = color;
+        });
+        return res;
+    }
+
+    function processBigRoad(hist) {
+        let res = [], c = 0, r = 0, last = null;
+        hist.forEach(v => {
+            if (v === 'T') { if (res.length > 0) res[res.length-1].ties = (res[res.length-1].ties || 0) + 1; return; }
+            if (!last) { res.push({ type: v, r: 0, c: 0, ties: 0 }); }
+            else if (v === last) {
+                let nr = r + 1, nc = c;
+                if (nr >= 6 || res.some(d => d.r === nr && d.c === nc)) { nr = r; nc++; }
+                r = nr; c = nc;
+                res.push({ type: v, r, c, ties: 0 });
+            } else {
+                r = 0; c++;
+                while (res.some(d => d.r === 0 && d.c === c)) c++;
+                res.push({ type: v, r: 0, c, ties: 0 });
+            }
+            last = v;
+        });
+        return res;
+    }
+
+    function derive(big, gap) {
+        let cols = []; let idx = -1;
+        big.forEach(n => { if (n.r === 0) { idx++; cols[idx] = []; } cols[idx].push(n.type); });
+        if (cols.length <= gap) return [];
+        let raw = [];
+        for (let i = gap; i < cols.length; i++) {
+            let start = (i === gap) ? 1 : 0;
+            for (let j = start; j < cols[i].length; j++) {
+                let red = false;
+                if (j === 0) red = (cols[i-1].length === cols[i-1-gap].length);
+                else {
+                    if (cols[i-gap][j]) red = true;
+                    else if (cols[i-gap][j-1] && !cols[i-gap][j+1]) red = false;
+                    else red = (!cols[i-gap][j] && cols[i-gap][j-1]);
+                }
+                raw.push(red ? 'R' : 'B');
+            }
+        }
+        return raw;
+    }
+
+    function renderBig(data) {
+        const g = document.getElementById('big-road'); g.innerHTML = '';
+        data.forEach(d => {
+            const el = document.createElement('div');
+            el.className = `dot ${d.type === 'B' ? 'b-bg' : 'p-bg'}`;
+            el.style.left = `${d.c * 24}px`; el.style.top = `${d.r * 24}px`;
+            el.innerText = d.type;
+            if (d.ties > 0) {
+                const t = document.createElement('div');
+                t.className = 'absolute -top-1 -right-1 text-[9px] bg-green-600 rounded-full w-4 h-4 flex items-center justify-center border border-black font-black';
+                t.innerText = d.ties; el.appendChild(t);
+            }
+            g.appendChild(el);
+        });
+        g.parentElement.scrollLeft = g.scrollWidth;
+    }
+
+    function renderSub(id, data, type) {
+        const g = document.getElementById(id); g.innerHTML = '';
+        data.forEach(d => {
+            const wrap = document.createElement('div');
+            wrap.className = 'sub-item';
+            wrap.style.left = `${d.c * 13}px`; wrap.style.top = `${d.r * 13}px`;
+            const m = document.createElement('div');
+            const color = d.color === 'R' ? 'red-c' : 'blue-c';
+            if (type === 'circle') m.className = `sub-circle ${d.color === 'R' ? 'border-red-500' : 'border-blue-500'}`;
+            else if (type === 'solid') m.className = `sub-solid ${color}`;
+            else m.className = `sub-slash ${color}`;
+            wrap.appendChild(m); g.appendChild(wrap);
+        });
+        g.parentElement.scrollLeft = g.scrollWidth;
+    }
+
+    // 初始化
+    refresh();
+</script>
+</body>
+</html>
+
+
